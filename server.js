@@ -11,26 +11,15 @@ app.use(cors());
 
 app.get('/photos', async (req, res) => {
   const albumId = req.query.albumId;
-
-  redisClient.get(`photos?albumId=${albumId}`, async (error, photos) => {
-    if (error) console.error(error);
-    if (photos != null) {
-      console.log('Chache Hit');
-      return res.json(JSON.parse(photos));
-    } else {
-      console.log('Chache Miss');
-      const { data } = await axios.get(
-        'https://jsonplaceholder.typicode.com/photos',
-        { params: { albumId } }
-      );
-      redisClient.setex(
-        `photos?albumId=${albumId}`,
-        DEFAULT_EXPIRATION,
-        JSON.stringify(data)
-      );
-      res.json(data);
-    }
+  const photos = await getOrSetCache(`photos?albumId=${albumId}`, async () => {
+    const { data } = await axios.get(
+      'https://jsonplaceholder.typicode.com/photos',
+      { params: { albumId } }
+    );
+    return data;
   });
+
+  res.json(photos);
 });
 
 app.get('/photos/:id', async (req, res) => {
@@ -39,6 +28,21 @@ app.get('/photos/:id', async (req, res) => {
   );
   res.json(data);
 });
+
+function getOrSetCache(key, cb) {
+  return new Promise((resolve, reject) => {
+    redisClient.get(key, async (error, data) => {
+      if (error) return reject(error);
+      if (data !== null) return resolve(JSON.parse(data));
+
+      const freshData = await cb();
+
+      redisClient.setex(key, DEFAULT_EXPIRATION, JSON.stringify(freshData));
+
+      resolve(freshData);
+    });
+  });
+}
 
 const PORT = 3000;
 
