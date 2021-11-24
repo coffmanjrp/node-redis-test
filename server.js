@@ -23,10 +23,14 @@ app.get('/photos', async (req, res) => {
 });
 
 app.get('/photos/:id', async (req, res) => {
-  const { data } = await axios.get(
-    `https://jsonplaceholder.typicode.com/photos/${req.params.id}`
-  );
-  res.json(data);
+  const photo = await getOrSetCache(`photos:${req.params.id}`, async () => {
+    const { data } = await axios.get(
+      `https://jsonplaceholder.typicode.com/photos/${req.params.id}`
+    );
+    return data;
+  });
+
+  res.json(photo);
 });
 
 function getOrSetCache(key, cb) {
